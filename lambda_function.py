@@ -86,9 +86,9 @@ def scrape_website(url):
         
         # Limit text to ~1000 words to avoid excessively large responses
         words = text.split()
-        # if len(words) > 1000:
-        #     text = ' '.join(words[:1000]) + '...'
+        if len(words) > 1000:
+            text = ' '.join(words)
         
-        return words
+        return text
     except Exception as e:
         return f"Error scraping {url}: {str(e)}"
