@@ -21,13 +21,19 @@ def handler(event, context):
             'content': scraped_content
         })
 
+    # Prepare the response in a JSON-serializable format
+    response = {
+        'query': search_query,
+        'results': scraped_results
+    }
+
     # Return the results
     return {
         'statusCode': 200,
-        'body': json.dumps({
-            'query': search_query,
-            'results': scraped_results
-        })
+        'body': json.dumps(response),
+        'headers': {
+            'Content-Type': 'application/json'
+        }
     }
 
 def perform_search(query):
@@ -60,7 +66,7 @@ def scrape_website(url):
             'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
         }
         response = requests.get(url, headers=headers, timeout=10)
-        response.raise_for_status()  # Raises a HTTPError if the status is 4xx, 5xx
+        response.raise_for_status()
         
         soup = BeautifulSoup(response.text, 'html.parser')
         
@@ -80,9 +86,9 @@ def scrape_website(url):
         
         # Limit text to ~1000 words to avoid excessively large responses
         words = text.split()
-        if len(words) > 1000:
-            text = ' '.join(words[:1000]) + '...'
+        # if len(words) > 1000:
+        #     text = ' '.join(words[:1000]) + '...'
         
-        return text
+        return words
     except Exception as e:
         return f"Error scraping {url}: {str(e)}"
