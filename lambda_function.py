@@ -1,26 +1,37 @@
 import json
 import requests
 from bs4 import BeautifulSoup
+from urllib.parse import quote_plus
 
 def handler(event, context):
     # Extract search query from the event
     search_query = event['query']
 
-    # Perform internet search
+    # Perform search
     search_results = perform_search(search_query)
 
-    # Process and summarize the search results
-    summary = summarize_results(search_results)
+    # Scrape top 3 results
+    scraped_results = []
+    for result in search_results[:3]:
+        scraped_content = scrape_website(result['link'])
+        scraped_results.append({
+            'title': result['title'],
+            'url': result['link'],
+            'snippet': result['snippet'],
+            'content': scraped_content
+        })
 
-    # Return the summarized results
+    # Return the results
     return {
         'statusCode': 200,
-        'body': json.dumps({'summary': summary})
+        'body': json.dumps({
+            'query': search_query,
+            'results': scraped_results
+        })
     }
 
 def perform_search(query):
-    # Use DuckDuckGo search API
-    url = f"https://html.duckduckgo.com/html/?q={query}"
+    url = f"https://html.duckduckgo.com/html/?q={quote_plus(query)}"
     headers = {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
     }
@@ -28,9 +39,8 @@ def perform_search(query):
     response = requests.get(url, headers=headers)
     soup = BeautifulSoup(response.text, 'html.parser')
 
-    # Extract relevant information from the search results
     results = []
-    for result in soup.find_all('div', class_='result__body')[:5]:  # Limit to top 5 results
+    for result in soup.find_all('div', class_='result__body')[:3]:  # Limit to top 3 results
         title = result.find('a', class_='result__a')
         snippet = result.find('a', class_='result__snippet')
         link = result.find('a', class_='result__url')
@@ -44,13 +54,35 @@ def perform_search(query):
 
     return results
 
-def summarize_results(results):
-    # This is a simple concatenation of results
-    # In a real-world scenario, you might want to use an LLM to generate a more coherent summary
-    summary = ""
-    for result in results:
-        summary += f"Title: {result['title']}\n"
-        summary += f"Snippet: {result['snippet']}\n"
-        summary += f"Link: {result['link']}\n\n"
-
-    return summary
+def scrape_website(url):
+    try:
+        headers = {
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/58.0.3029.110 Safari/537.3'
+        }
+        response = requests.get(url, headers=headers, timeout=10)
+        response.raise_for_status()  # Raises a HTTPError if the status is 4xx, 5xx
+        
+        soup = BeautifulSoup(response.text, 'html.parser')
+        
+        # Remove script and style elements
+        for script in soup(["script", "style"]):
+            script.decompose()
+        
+        # Get text
+        text = soup.get_text()
+        
+        # Break into lines and remove leading and trailing space on each
+        lines = (line.strip() for line in text.splitlines())
+        # Break multi-headlines into a line each
+        chunks = (phrase.strip() for line in lines for phrase in line.split("  "))
+        # Drop blank lines
+        text = '\n'.join(chunk for chunk in chunks if chunk)
+        
+        # Limit text to ~1000 words to avoid excessively large responses
+        words = text.split()
+        if len(words) > 1000:
+            text = ' '.join(words[:1000]) + '...'
+        
+        return text
+    except Exception as e:
+        return f"Error scraping {url}: {str(e)}"
