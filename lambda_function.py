@@ -2,7 +2,7 @@ import json
 import requests
 from bs4 import BeautifulSoup
 
-def lambda_handler(event, context):
+def handler(event, context):
     # Extract search query from the event
     search_query = event['query']
 
